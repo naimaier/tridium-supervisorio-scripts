@@ -1,6 +1,6 @@
 'Variables available only for this group can be declared here.
 
-Dim TargetFile, DBConnectionName, TableName, DateFrom, DateTo, AvgGroupPeriod, tagProgress
+Dim TargetFile, DBConnectionName, TableName, DateFrom, DateTo, AvgGroupPeriod, tagProgress, strSelectColumns
 
 'The code configured here is executed while the condition configured in the Execution field is TRUE.
 
@@ -36,4 +36,19 @@ End Select
 
 tagProgress = "Progress"
 
-Call ExportDBToCSV(TargetFile, DBConnectionName, TableName, DateFrom, DateTo, AvgGroupPeriod, tagProgress)
+strSelectColumns = "[Time_Stamp]"
+
+If $intSQLColunas->b0=1 Then
+	strSelectColumns = strSelectColumns & ", [100TT01]"
+End If
+If $intSQLColunas->b1=1 Then
+	strSelectColumns = strSelectColumns & ", [100TT02]"
+End If
+If $intSQLColunas->b2=1 Then
+	strSelectColumns = strSelectColumns & ", [100TT03]"
+End If
+If $intSQLColunas->b3=1 Then
+	strSelectColumns = strSelectColumns & ", [100TT04]"
+End If
+
+Call ExportDBToCSV(TargetFile, DBConnectionName, TableName, DateFrom, DateTo, AvgGroupPeriod, tagProgress, strSelectColumns)

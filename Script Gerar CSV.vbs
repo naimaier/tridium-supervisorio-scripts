@@ -17,7 +17,7 @@ Option Explicit
 ' - tagProgress: String value with the name of the tag that will receive the progress value (0-100%) for the values exported to Excel. If omitted (""), the progress will not be tracked.
 ' * Returned Value: Number of rows exported to the CSV file. 
 ' * Dependences: None
-Function ExportDBToCSV(TargetFile, DBConnectionName, TableName, DateFrom, DateTo, AvgGroupPeriod, tagProgress)
+Function ExportDBToCSV(TargetFile, DBConnectionName, TableName, DateFrom, DateTo, AvgGroupPeriod, tagProgress, strSelectColumns)
 
 	Dim sql, numRows, row, numCur, txt, numCols, col, colName(), prefix, suffix, prefixTime_Stamp, sqlCols
 
@@ -25,7 +25,7 @@ Function ExportDBToCSV(TargetFile, DBConnectionName, TableName, DateFrom, DateTo
 	If InStr(TargetFile, ".csv")<1 Then TargetFile = TargetFile & ".csv" 
 	
 	'select one row to get the column's names
-	sql = "SELECT TOP 1 * FROM " & TableName 
+	sql = "SELECT TOP 1 " & strSelectColumns & " FROM " & TableName 
 	numCur = $DBCursorOpenSql(DBConnectionName, sql)
 	numRows = $DBCursorRowCount(numCur)
 	If numRows>0 Then
@@ -57,7 +57,7 @@ Function ExportDBToCSV(TargetFile, DBConnectionName, TableName, DateFrom, DateTo
 	sql = ""
 	If (DateFrom<>"" And DateTo<>"") Then sql = " WHERE Time_Stamp>='" & DateFrom & "' AND Time_Stamp<='" & DateTo & "'"
 	If AvgGroupPeriod="" Then 
-		sql = "SELECT * FROM " & TableName & sql & " ORDER BY Time_Stamp"
+		sql = "SELECT " & strSelectColumns & " FROM " & TableName & sql & " ORDER BY Time_Stamp"
 	Else
 		sql = "SELECT " & sqlCols & " FROM " & TableName & sql & " GROUP BY DateAdd(" & AvgGroupPeriod & ",DateDiff(" & AvgGroupPeriod & ",0,Time_Stamp),0)" & " ORDER BY Min(Time_Stamp)"
 	End If	
