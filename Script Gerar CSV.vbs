@@ -30,7 +30,6 @@ Function ExportDBToCSV(TargetFile, DBConnectionName, TableName, DateFrom, DateTo
 	numRows = $DBCursorRowCount(numCur)
 	If numRows>0 Then
 			numCols = $DBCursorColumnCount(numCur)
-			$stringTeste = numCols
 			ReDim colName(numCols)
 			txt = ""
 			sqlCols = ""
