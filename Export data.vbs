@@ -1,6 +1,6 @@
 'Variables available only for this group can be declared here.
 
-Dim TargetFile, DBConnectionName, TableName, DateFrom, DateTo, AvgGroupPeriod, tagProgress, strSelectColumns
+Dim TargetFile, DBConnectionName, TableName, DateFrom, DateTo, AvgGroupPeriod, tagProgress
 
 'The code configured here is executed while the condition configured in the Execution field is TRUE.
 
@@ -36,49 +36,4 @@ End Select
 
 tagProgress = "Progress"
 
-strSelectColumns = GetSelectedColumns(DBConnectionName, TableName)
-
-Call ExportDBToCSV(TargetFile, DBConnectionName, TableName, DateFrom, DateTo, AvgGroupPeriod, tagProgress, strSelectColumns)
-
-'TODO comentar
-Function GetSelectedColumns(DBConnectionName, TableName)
-
-	Dim sql, numCur, numRows, numCols, colName(), col, strColumns
-
-	'select one row to get the column's names
-	sql = "SELECT TOP 1 * FROM " & TableName 
-	numCur = $DBCursorOpenSql(DBConnectionName, sql)
-	numRows = $DBCursorRowCount(numCur)
-
-	'if sql returns no result, exit function and return * (all columns)
-	If numRows<1 Then
-		$DBCursorClose(numCur)
-		GetSelectedColumns = "*"
-		Exit Function
-	End If
-
-	numCols = $DBCursorColumnCount(numCur)
-	ReDim colName(numCols)
-
-	For col=1 To numCols
-		colName(col) = $DBCursorColumnInfo(numCur, $Num(col), 0)
-	Next
-	$DBCursorClose(numCur)
-
-
-	'limit number of columns so it won't exceed an int (32bit) + 1st column (always present)
-	limitCols = $Min(numCols, 33)
-
-	For col=1 To numCols
-		If col=1 Then
-			strColumns = "[" & colName(col) & "]"
-
-		'bit count goes from 0 to 31
-		Else If $GetBit($intSQLColunas, col-2) = 1 Then
-			strColumns = strColumns & ", [" & colName(col) & "]"
-
-		End If
-	Next
-	
-	GetSelectedColumns = strColumns
-End Function
+Call ExportDBToCSV(TargetFile, DBConnectionName, TableName, DateFrom, DateTo, AvgGroupPeriod, tagProgress, $intSQLColunas)

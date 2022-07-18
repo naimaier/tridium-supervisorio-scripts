@@ -15,17 +15,22 @@ Option Explicit
 ' - AvgGroupPeriod: Type of grouping for the records. If omitted, the actual original records will be exported. Otherwise, the average for the values will be calculated based on the grouping period:
 '   year: "yy", quarter: "q", month: "m", dayofyear: "dy", day: "dd", week: "ww", weekday: "dw", hour: "hh", minute: "mi")
 ' - tagProgress: String value with the name of the tag that will receive the progress value (0-100%) for the values exported to Excel. If omitted (""), the progress will not be tracked.
+' - UserSelectedColumns: An integer whose bits represents the columns selected by the user
+'     with it's least significant bit representing the second column of the table 
+'     (e.g.: 0101 -> selects columns 2 and 4) + the first column is always present
 ' * Returned Value: Number of rows exported to the CSV file. 
 ' * Dependences: None
-Function ExportDBToCSV(TargetFile, DBConnectionName, TableName, DateFrom, DateTo, AvgGroupPeriod, tagProgress, strSelectColumns)
+Function ExportDBToCSV(TargetFile, DBConnectionName, TableName, DateFrom, DateTo, AvgGroupPeriod, tagProgress, UserSelectedColumns)
 
-	Dim sql, numRows, row, numCur, txt, numCols, col, colName(), prefix, suffix, prefixTime_Stamp, sqlCols
+	Dim sql, numRows, row, numCur, txt, numCols, col, colName(), prefix, suffix, prefixTime_Stamp, sqlCols, strQueryColumns
 
 	'make sure the file extension is "csv"
 	If InStr(TargetFile, ".csv")<1 Then TargetFile = TargetFile & ".csv" 
+
+	strQueryColumns = GetSelectedColumnsQuery(DBConnectionName, TableName, UserSelectedColumns)
 	
 	'select one row to get the column's names
-	sql = "SELECT TOP 1 " & strSelectColumns & " FROM " & TableName 
+	sql = "SELECT TOP 1 " & strQueryColumns & " FROM " & TableName 
 	numCur = $DBCursorOpenSql(DBConnectionName, sql)
 	numRows = $DBCursorRowCount(numCur)
 	If numRows>0 Then
@@ -56,7 +61,7 @@ Function ExportDBToCSV(TargetFile, DBConnectionName, TableName, DateFrom, DateTo
 	sql = ""
 	If (DateFrom<>"" And DateTo<>"") Then sql = " WHERE Time_Stamp>='" & DateFrom & "' AND Time_Stamp<='" & DateTo & "'"
 	If AvgGroupPeriod="" Then 
-		sql = "SELECT " & strSelectColumns & " FROM " & TableName & sql & " ORDER BY Time_Stamp"
+		sql = "SELECT " & strQueryColumns & " FROM " & TableName & sql & " ORDER BY Time_Stamp"
 	Else
 		sql = "SELECT " & sqlCols & " FROM " & TableName & sql & " GROUP BY DateAdd(" & AvgGroupPeriod & ",DateDiff(" & AvgGroupPeriod & ",0,Time_Stamp),0)" & " ORDER BY Min(Time_Stamp)"
 	End If	
@@ -79,6 +84,63 @@ Function ExportDBToCSV(TargetFile, DBConnectionName, TableName, DateFrom, DateTo
 	'returns the number of rows actually exported to the target file
 	ExportDBToCSV = $max(0, numRows)
 End Function
+
+
+'DESCRIPTION: Generates the SQL query's column selection part containing the columns selected by the user.
+'PARAMETERS:
+' - DBConnectionName: Name (alias) of the 'Database/ERP' connection (e.g.: "DB")
+' - TableName: Name of the table where the values will be imported from.
+' - UserSelectedColumns: An integer whose bits represents the columns selected by the user
+'     with it's least significant bit representing the second column of the table 
+'     (e.g.: 0101 -> selects columns 2 and 4) + the first column is always present
+'RETURNED VALUES: A string containing a SQL query's column selection part
+'DEPENDENCIES: None
+'AUTHOR: Henrique Morin Naimaier
+Function GetSelectedColumnsQuery(DBConnectionName, TableName, UserSelectedColumns)
+
+	Dim sql, numCur, numRows, numCols, limitCols, colName(), col, strQueryColumns
+
+	'select one row to get the column's names
+	sql = "SELECT TOP 1 * FROM " & TableName 
+	numCur = $DBCursorOpenSql(DBConnectionName, sql)
+	numRows = $DBCursorRowCount(numCur)
+
+	'if sql returns no result, exit function and return * (all columns)
+	If numRows<1 Then
+		$DBCursorClose(numCur)
+		GetSelectedColumnsQuery = "*"
+		Exit Function
+	End If
+
+	'get the column's names
+	numCols = $DBCursorColumnCount(numCur)
+	ReDim colName(numCols)
+
+	For col=1 To numCols
+		colName(col) = $DBCursorColumnInfo(numCur, $Num(col), 0)
+	Next
+	$DBCursorClose(numCur)
+
+
+	'limit number of columns so it won't exceed 33,
+	'33: an int (32bit) 32 selectable columns + 1st column (timestamp, always present)
+	limitCols = $Min(numCols, 33)
+
+	'fill the string with selected columns' names
+	For col=1 To limitCols
+		If col=1 Then
+			strQueryColumns = "[" & colName(col) & "]"
+
+		'bit count goes from 0 to 31
+		ElseIf $GetBit(UserSelectedColumns, col-2) = 1 Then
+			strQueryColumns = strQueryColumns & ", [" & colName(col) & "]"
+
+		End If
+	Next
+	
+	GetSelectedColumnsQuery = strQueryColumns
+End Function
+
 
 //$region: Report Functions
 
