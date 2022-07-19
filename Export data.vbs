@@ -16,6 +16,8 @@ Select Case $AreaExportar
 	Case Else TableName = ""
 End Select
 
+$SetDateFormat("/","DMY")
+
 DateFrom = FormatDateToSQL($StartDateTime, 0)
 $DateToSql = DateFrom
 
