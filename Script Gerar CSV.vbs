@@ -5,7 +5,7 @@ Option Explicit
 'Global variables are NOT supported in this interface.
 
 
-' * Description: Exports data from a SQL Server database table into a CSV file
+' * Description: Exports data from a SQL Server database table into a CSV file. Update: Now the function will ask the user if he want's to export more than 16000 records.
 ' * Arguments:
 '  - TargetFile: Path and name of the target CSV file (e.g.: "c:\temp\Test.csv").
 ' - DBConnectionName: Name (alias) of the 'Database/ERP' connection (e.g.: "DB")
@@ -22,7 +22,7 @@ Option Explicit
 ' * Dependences: None
 Function ExportDBToCSV(TargetFile, DBConnectionName, TableName, DateFrom, DateTo, AvgGroupPeriod, tagProgress, UserSelectedColumns)
 
-	Dim sql, numRows, row, numCur, txt, numCols, col, colName(), prefix, suffix, prefixTime_Stamp, sqlCols, strQueryColumns
+	Dim sql, numRows, row, numCur, txt, numCols, col, colName(), prefix, suffix, prefixTime_Stamp, sqlCols, strQueryColumns, blnRepeatQuery, numTotalExportedRows
 
 	'make sure the file extension is "csv"
 	If InStr(TargetFile, ".csv")<1 Then TargetFile = TargetFile & ".csv" 
@@ -57,32 +57,56 @@ Function ExportDBToCSV(TargetFile, DBConnectionName, TableName, DateFrom, DateTo
 	End If
 	$DBCursorClose(numCur)
 	
-	'queries the actual data to be exported to the csv file
-	sql = ""
-	If (DateFrom<>"" And DateTo<>"") Then sql = " WHERE Time_Stamp>='" & DateFrom & "' AND Time_Stamp<='" & DateTo & "'"
-	If AvgGroupPeriod="" Then 
-		sql = "SELECT " & strQueryColumns & " FROM " & TableName & sql & " ORDER BY Time_Stamp"
-	Else
-		sql = "SELECT " & sqlCols & " FROM " & TableName & sql & " GROUP BY DateAdd(" & AvgGroupPeriod & ",DateDiff(" & AvgGroupPeriod & ",0,Time_Stamp),0)" & " ORDER BY Min(Time_Stamp)"
-	End If	
-	numCur = $DBCursorOpenSQL(DBConnectionName, sql)
-	numRows = $DBCursorRowCount(numCur)
+	'setting before loop because of the datefrom check
+	blnRepeatQuery = False
+	numTotalExportedRows = 0
 
-	For row=1 To numRows
-		txt = ""
-		For col=1 To numCols
-			If col>1 Then txt = txt & ";"
-			txt = txt & $DBCursorGetValue(numCur, colName(col))
+	Do
+		'queries the actual data to be exported to the csv file
+		sql = ""
+		If (DateFrom<>"" And DateTo<>"" And blnRepeatQuery=False) Then sql = " WHERE Time_Stamp>='" & DateFrom & "' AND Time_Stamp<='" & DateTo & "'"
+		'if it's a repetition don't include the DateFrom timestamp (already present in the written file)
+		If (DateFrom<>"" And DateTo<>"" And blnRepeatQuery) Then sql = " WHERE Time_Stamp>'" & DateFrom & "' AND Time_Stamp<='" & DateTo & "'"
+		If (DateFrom<>"" And DateTo="" And blnRepeatQuery) Then sql = " WHERE Time_Stamp>'" & DateFrom
+		If AvgGroupPeriod="" Then 
+			sql = "SELECT " & strQueryColumns & " FROM " & TableName & sql & " ORDER BY Time_Stamp"
+		Else
+			sql = "SELECT " & sqlCols & " FROM " & TableName & sql & " GROUP BY DateAdd(" & AvgGroupPeriod & ",DateDiff(" & AvgGroupPeriod & ",0,Time_Stamp),0)" & " ORDER BY Min(Time_Stamp)"
+		End If	
+		numCur = $DBCursorOpenSQL(DBConnectionName, sql)
+		numRows = $DBCursorRowCount(numCur)
+
+		For row=1 To numRows
+			txt = ""
+			For col=1 To numCols
+				If col>1 Then txt = txt & ";"
+				txt = txt & $DBCursorGetValue(numCur, colName(col))
+			Next
+			$FileWrite(TargetFile, txt, 1)
+			$DBCursorNext(numCur)
+			'updates the tag (if any) used to track the progress of the operation
+			If tagProgress<>"" Then $SetTagValue(tagProgress, row/numRows*100)
 		Next
-		$FileWrite(TargetFile, txt, 1)
-		$DBCursorNext(numCur)
-		'updates the tag (if any) used to track the progress of the operation
-		If tagProgress<>"" Then $SetTagValue(tagProgress, row/numRows*100)
-	Next
+
+		blnRepeatQuery = False
+		If numRows=16000 Then
+			'get the last timestamp from the resultset
+			DateFrom = $DBCursorGetValue(numCur, colName(1))
+
+			If MsgBox("O número de resultados encontrados é grande e pode levar algum tempo. Continuar exportando?",4,"Escolha uma opção") = 6
+				blnRepeatQuery = True
+			End If
+
+		End If
+
+		numTotalExportedRows += numRows
+	
+	Loop While blnRepeatQuery
+
 	$DBCursorClose(numCur)
 	
 	'returns the number of rows actually exported to the target file
-	ExportDBToCSV = $max(0, numRows)
+	ExportDBToCSV = $max(0, numTotalExportedRows)
 End Function
 
 
